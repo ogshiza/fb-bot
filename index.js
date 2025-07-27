@@ -1,62 +1,68 @@
-const express = require('express');
-const bodyParser = require('body-parser');
-const axios = require('axios');
+const express = require("express");
+const bodyParser = require("body-parser");
+
 const app = express();
+const PORT = process.env.PORT || 3000;
 
-const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
-const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
-
+// Парсим входящие JSON
 app.use(bodyParser.json());
 
-app.get('/', (req, res) => {
-  res.send('Facebook Bot is running');
+// Главная страница (необязательно)
+app.get("/", (req, res) => {
+  res.send("FB bot is running.");
 });
 
-app.get('/webhook', (req, res) => {
-  const mode = req.query['hub.mode'];
-  const token = req.query['hub.verify_token'];
-  const challenge = req.query['hub.challenge'];
+// Верификация Webhook
+app.get("/webhook", (req, res) => {
+  const VERIFY_TOKEN = process.env.VERIFY_TOKEN || "carpetlux123";
 
-  if (mode && token) {
-    if (mode === 'subscribe' && token === VERIFY_TOKEN) {
-      console.log('WEBHOOK_VERIFIED');
-      res.status(200).send(challenge);
-    } else {
-      res.sendStatus(403);
-    }
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode && token && mode === "subscribe" && token === VERIFY_TOKEN) {
+    console.log("WEBHOOK_VERIFIED");
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
   }
 });
 
-app.post('/webhook', (req, res) => {
+// Обработка сообщений
+app.post("/webhook", (req, res) => {
   const body = req.body;
 
-  if (body.object === 'page') {
-    body.entry.forEach(entry => {
+  if (body.object === "page") {
+    body.entry.forEach(function(entry) {
       const webhookEvent = entry.messaging[0];
       const senderPsid = webhookEvent.sender.id;
 
       if (webhookEvent.message && webhookEvent.message.text) {
-        const receivedMessage = webhookEvent.message.text;
-        callSendAPI(senderPsid, `Вы написали: ${receivedMessage}`);
+        handleMessage(senderPsid, webhookEvent.message.text);
       }
     });
-
-    res.status(200).send('EVENT_RECEIVED');
+    res.status(200).send("EVENT_RECEIVED");
   } else {
     res.sendStatus(404);
   }
 });
 
-function callSendAPI(senderPsid, responseText) {
-  axios.post(`https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, {
+// Отправка сообщения
+const axios = require("axios");
+function handleMessage(senderPsid, receivedText) {
+  const PAGE_ACCESS_TOKEN = process.env.PAGE_ACCESS_TOKEN;
+
+  const messageData = {
     recipient: { id: senderPsid },
-    message: { text: responseText }
-  }).catch(err => {
-    console.error('Ошибка при отправке сообщения:', err.response ? err.response.data : err.message);
-  });
+    message: { text: `Вы написали: ${receivedText}` }
+  };
+
+  axios.post(`https://graph.facebook.com/v18.0/me/messages?access_token=${PAGE_ACCESS_TOKEN}`, messageData)
+    .then(() => console.log("Message sent"))
+    .catch(err => console.error("Error sending message:", err.response?.data || err));
 }
 
-const PORT = process.env.PORT || 3000;
+// Запуск сервера
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
